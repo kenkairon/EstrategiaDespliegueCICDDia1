@@ -1,0 +1,85 @@
+name: Airflow CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AIRFLOW_VERSION: 2.7.0
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  test:
+    name: 🧪 Test DAGs
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout código
+      uses: actions/checkout@v3
+    
+    - name: 🐍 Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: 📦 Instalar dependencias
+      run: |
+        pip install --upgrade pip
+        pip install apache-airflow==${{ env.AIRFLOW_VERSION }}
+        pip install pytest pytest-cov
+    
+    - name: ✅ Validar sintaxis de DAGs
+      run: |
+        python -c "
+        from airflow.models import DagBag
+        dagbag = DagBag(dag_folder='dags/', include_examples=False)
+        if dagbag.import_errors:
+            print('❌ ERRORES EN DAGs:', dagbag.import_errors)
+            exit(1)
+        print(f'✅ {len(dagbag.dags)} DAGs cargados correctamente')
+        "
+    
+    - name: 🧪 Ejecutar tests
+      run: |
+        pytest tests/dags/ -v --cov=dags --cov-report=xml --cov-report=term
+    
+    - name: 📊 Subir reporte de cobertura
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  deploy-dev:
+    name: 🚀 Deploy a Dev
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    
+    steps:
+    - name: 📥 Checkout código
+      uses: actions/checkout@v3
+    
+    - name: 🚀 Deploy a Development
+      run: |
+        echo "🔧 Desplegando a ambiente de desarrollo..."
+        echo "✅ Deployment exitoso"
+
+  deploy-prod:
+    name: 🎯 Deploy a Producción
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: 📥 Checkout código
+      uses: actions/checkout@v3
+    
+    - name: 🎯 Deploy a Production
+      run: |
+        echo "🚀 Desplegando a producción..."
+        echo "✅ Deployment a producción exitoso"
