@@ -1,5 +1,9 @@
 # README: Configuración de CI/CD para Apache Airflow con GitHub Actions
 
+| Autor            | Fecha        | Día |
+|------------------|--------------|----------|
+| **Carlos Vásquez** |31 Enero 2026 | 1|
+
 ## 📋 Guía Paso a Paso para Principiantes
 
 Este tutorial te guiará para configurar un pipeline CI/CD completo para tus DAGs de Apache Airflow usando GitHub Actions.
@@ -504,3 +508,5 @@ pip install -r requirements.txt
 - [ ] Workflow ejecutándose correctamente
 - [ ] Tests pasando (verde en Actions)
 
+## Evidencia
+![Evidencia Test](images.png)
