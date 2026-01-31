@@ -8,6 +8,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.9'
+  AIRFLOW_HOME: /home/runner/airflow
 
 jobs:
   test:
@@ -38,11 +39,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
     
-    - name: 📦 Instalar Apache Airflow (sin extras problemáticos)
+    - name: 📦 Instalar Apache Airflow
       run: |
         pip install --upgrade pip setuptools wheel
         
-        # Instalar Airflow sin google-re2 y otras dependencias problemáticas
+        # Instalar Airflow con constraints
         CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-2.7.0/constraints-3.9.txt"
         pip install "apache-airflow==2.7.0" --constraint "${CONSTRAINT_URL}"
     
@@ -50,8 +51,27 @@ jobs:
       run: |
         pip install pytest pytest-cov
     
+    - name: 🗄️ Inicializar base de datos de Airflow
+      run: |
+        # Crear directorio de Airflow
+        mkdir -p $AIRFLOW_HOME
+        
+        # Configurar Airflow para usar SQLite en memoria para tests
+        export AIRFLOW__CORE__DAGS_FOLDER=$(pwd)/dags
+        export AIRFLOW__CORE__LOAD_EXAMPLES=False
+        export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:///$AIRFLOW_HOME/airflow.db
+        
+        # Inicializar la base de datos
+        airflow db init
+        
+        echo "✅ Base de datos inicializada"
+    
     - name: ✅ Validar sintaxis de DAGs
       run: |
+        export AIRFLOW__CORE__DAGS_FOLDER=$(pwd)/dags
+        export AIRFLOW__CORE__LOAD_EXAMPLES=False
+        export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:///$AIRFLOW_HOME/airflow.db
+        
         python -c "
         from airflow.models import DagBag
         dagbag = DagBag(dag_folder='dags/', include_examples=False)
@@ -65,12 +85,20 @@ jobs:
     
     - name: 🧪 Ejecutar tests
       run: |
+        export AIRFLOW__CORE__DAGS_FOLDER=$(pwd)/dags
+        export AIRFLOW__CORE__LOAD_EXAMPLES=False
+        export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:///$AIRFLOW_HOME/airflow.db
+        export AIRFLOW__CORE__UNIT_TEST_MODE=True
+        
         pytest tests/dags/ -v --cov=dags --cov-report=xml --cov-report=term
     
     - name: 📊 Mostrar resumen de cobertura
+      if: always()
       run: |
-        echo "📊 Resumen de cobertura:"
-        coverage report
+        if [ -f .coverage ]; then
+          echo "📊 Resumen de cobertura:"
+          coverage report
+        fi
 
   deploy-dev:
     name: 🚀 Deploy a Dev
