@@ -7,7 +7,6 @@ on:
     branches: [ main ]
 
 env:
-  AIRFLOW_VERSION: 2.7.0
   PYTHON_VERSION: '3.9'
 
 jobs:
@@ -24,10 +23,31 @@ jobs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
     
-    - name: 📦 Instalar dependencias
+    - name: 📦 Instalar dependencias del sistema
       run: |
-        pip install --upgrade pip
-        pip install apache-airflow==${{ env.AIRFLOW_VERSION }}
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          build-essential \
+          libpq-dev
+    
+    - name: 💾 Cache de pip
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: 📦 Instalar Apache Airflow (sin extras problemáticos)
+      run: |
+        pip install --upgrade pip setuptools wheel
+        
+        # Instalar Airflow sin google-re2 y otras dependencias problemáticas
+        CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-2.7.0/constraints-3.9.txt"
+        pip install "apache-airflow==2.7.0" --constraint "${CONSTRAINT_URL}"
+    
+    - name: 📦 Instalar dependencias de testing
+      run: |
         pip install pytest pytest-cov
     
     - name: ✅ Validar sintaxis de DAGs
@@ -39,19 +59,18 @@ jobs:
             print('❌ ERRORES EN DAGs:', dagbag.import_errors)
             exit(1)
         print(f'✅ {len(dagbag.dags)} DAGs cargados correctamente')
+        for dag_id in dagbag.dag_ids:
+            print(f'   - {dag_id}')
         "
     
     - name: 🧪 Ejecutar tests
       run: |
         pytest tests/dags/ -v --cov=dags --cov-report=xml --cov-report=term
     
-    - name: 📊 Subir reporte de cobertura
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+    - name: 📊 Mostrar resumen de cobertura
+      run: |
+        echo "📊 Resumen de cobertura:"
+        coverage report
 
   deploy-dev:
     name: 🚀 Deploy a Dev
@@ -66,7 +85,9 @@ jobs:
     - name: 🚀 Deploy a Development
       run: |
         echo "🔧 Desplegando a ambiente de desarrollo..."
-        echo "✅ Deployment exitoso"
+        echo "📁 DAGs encontrados:"
+        ls -la dags/
+        echo "✅ Deployment exitoso a DEV"
 
   deploy-prod:
     name: 🎯 Deploy a Producción
@@ -82,4 +103,6 @@ jobs:
     - name: 🎯 Deploy a Production
       run: |
         echo "🚀 Desplegando a producción..."
+        echo "📁 DAGs a desplegar:"
+        ls -la dags/
         echo "✅ Deployment a producción exitoso"
