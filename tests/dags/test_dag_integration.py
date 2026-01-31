@@ -15,11 +15,37 @@ class TestDAGIntegration:
     def test_dag_no_cycles(self, dagbag):
         """Verificar que no hay ciclos en dependencias"""
         dag = dagbag.dags['etl_pipeline']
+        
         # Verificar manualmente que no hay ciclos
-        # El método test_cycle() devuelve False si NO hay ciclos
-        has_cycle = dag.test_cycle()
-        assert has_cycle == False, "❌ DAG tiene ciclos"
-        print("✅ Sin ciclos de dependencias")
+        # Intentar hacer un topological sort - si hay ciclo, fallará
+        try:
+            # Usar el task_dict para verificar
+            visited = set()
+            rec_stack = set()
+            
+            def has_cycle_util(task_id):
+                visited.add(task_id)
+                rec_stack.add(task_id)
+                
+                task = dag.task_dict[task_id]
+                for downstream_task in task.downstream_list:
+                    if downstream_task.task_id not in visited:
+                        if has_cycle_util(downstream_task.task_id):
+                            return True
+                    elif downstream_task.task_id in rec_stack:
+                        return True
+                
+                rec_stack.remove(task_id)
+                return False
+            
+            for task_id in dag.task_dict:
+                if task_id not in visited:
+                    if has_cycle_util(task_id):
+                        assert False, "❌ DAG tiene ciclos"
+            
+            print("✅ Sin ciclos de dependencias")
+        except Exception as e:
+            assert False, f"❌ Error verificando ciclos: {e}"
     
     def test_dag_tags(self, dagbag):
         """Verificar que el DAG tiene tags"""
